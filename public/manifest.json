@@ -1,0 +1,19 @@
+{
+  "name": "RenneScience - Centre de Commandement Urbain",
+  "short_name": "RenneScience",
+  "description": "Plateforme de pilotage territorial de Rennes Métropole",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#2ea043",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["government", "utilities", "productivity"],
+  "lang": "fr-FR"
+}
