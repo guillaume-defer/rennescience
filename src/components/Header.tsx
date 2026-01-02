@@ -1,6 +1,13 @@
 import { RefreshCw, Menu, X, Clock, Wifi, Activity } from 'lucide-react';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+
+const formatTime = (date: Date): string => {
+  return date.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+};
 
 interface HeaderProps {
   lastUpdate: Date | null;
@@ -84,7 +91,7 @@ export default function Header({
           <div className="hidden md:flex items-center gap-2 text-palantir-text-muted">
             <Clock className="w-4 h-4" />
             <span className="text-xs font-mono">
-              {format(lastUpdate, 'HH:mm:ss', { locale: fr })}
+              {formatTime(lastUpdate)}
             </span>
           </div>
         )}
