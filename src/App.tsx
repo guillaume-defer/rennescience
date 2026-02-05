@@ -1,59 +1,43 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useRealtimeData } from './hooks/useRealtimeData';
+import { useAPIMonitor } from './hooks/useAPIMonitor';
 import DGCLDashboard from './components/DGCLDashboard';
 import TerritorialMap from './components/TerritorialMap';
 import CrisisCenter from './components/CrisisCenter';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
-import APIStatusPanel from './components/APIStatusPanel';
-import { API_REGISTRY } from './config/apiConfig';
-import { territorialDataService } from './services/territorialDataService';
+import APIConnectionDashboard from './components/APIConnectionDashboard';
 import type { NavigationView } from './types';
 
 function App() {
   const [currentView, setCurrentView] = useState<NavigationView>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [apiStatusOpen, setApiStatusOpen] = useState(false);
-  const [apiCount, setApiCount] = useState({ online: 0, total: API_REGISTRY.length });
-  
-  const { 
-    veloStations, 
-    parkings, 
-    busPositions, 
-    alerts, 
+
+  // Realtime data hook
+  const {
+    veloStations,
+    parkings,
+    busPositions,
+    alerts,
     metroLines,
     busLines,
     metroStations,
     communes,
-    stats, 
-    loading, 
+    stats,
+    loading,
     error,
-    lastUpdate, 
-    refresh 
+    lastUpdate,
+    refresh
   } = useRealtimeData();
+
+  // API Monitor hook - manages all API connections
+  const { summary } = useAPIMonitor(true);
 
   // busStops disponible via useRealtimeData() pour usage futur
   void busLines; // Utilisé pour éviter l'erreur TS6133
-
-  // Vérifier le statut des APIs au démarrage
-  useEffect(() => {
-    const checkAPIs = async () => {
-      try {
-        const results = await territorialDataService.checkAllAPIStatuses();
-        const onlineCount = results.filter(r => r.status === 'online').length;
-        setApiCount({ online: onlineCount, total: results.length });
-      } catch (e) {
-        console.error('Error checking API status:', e);
-      }
-    };
-    
-    checkAPIs();
-    // Vérifier toutes les 2 minutes
-    const interval = setInterval(checkAPIs, 120000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleNavigation = useCallback((view: NavigationView) => {
     setCurrentView(view);
@@ -107,14 +91,14 @@ function App() {
   return (
     <div className="h-screen flex flex-col bg-palantir-bg overflow-hidden">
       {/* Header */}
-      <Header 
+      <Header
         lastUpdate={lastUpdate}
         loading={loading}
         onRefresh={refresh}
         onToggleSidebar={toggleSidebar}
         sidebarOpen={sidebarOpen}
         onOpenAPIStatus={openAPIStatus}
-        apiCount={apiCount}
+        apiCount={{ online: summary.online, total: summary.total }}
       />
 
       {/* Main Content */}
@@ -142,8 +126,8 @@ function App() {
         </main>
       </div>
 
-      {/* API Status Panel Modal */}
-      <APIStatusPanel 
+      {/* API Connection Dashboard Modal */}
+      <APIConnectionDashboard
         isOpen={apiStatusOpen}
         onClose={closeAPIStatus}
       />
