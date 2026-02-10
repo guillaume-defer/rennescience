@@ -1,4 +1,5 @@
-import { buildSTARUrl, buildRennesMetropoleUrl, API_CONFIG, API_REGISTRY } from '../config/apiConfig';
+import { buildSTARUrl, buildRennesMetropoleUrl, API_CONFIG } from '../config/apiConfig';
+import { apiManager, type APIConnectionResult } from './apiConnectionManager';
 import type {
   VeloStation,
   ParkingRelais,
@@ -24,50 +25,44 @@ interface OpenDataSoftResponse<T> {
   results: T[];
 }
 
-interface APIStatusResult {
-  id: string;
-  name: string;
-  status: 'online' | 'offline' | 'error';
-  responseTime: number;
-  lastCheck: Date;
-  recordCount?: number;
-}
-
 // === Classe de service principale ===
+// Utilise maintenant le apiConnectionManager centralisé pour toutes les requêtes API
 class TerritorialDataService {
-  private cache: Map<string, { data: unknown; timestamp: number }> = new Map();
-  private cacheTTL = 30000; // 30 secondes
-  private apiStatuses: Map<string, APIStatusResult> = new Map();
 
-  // === Méthode générique de fetch avec cache et gestion d'erreur robuste ===
-  private async fetchWithCache<T>(url: string, cacheKey: string, fallbackUrl?: string): Promise<T | null> {
-    const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
-      return cached.data as T;
+  // === Méthode helper pour utiliser le manager centralisé ===
+  private async fetchFromManager<T>(endpointId: string): Promise<OpenDataSoftResponse<T> | null> {
+    const result: APIConnectionResult<OpenDataSoftResponse<T>> = await apiManager.fetch<OpenDataSoftResponse<T>>(endpointId);
+
+    if (!result.success) {
+      console.warn(`[TerritorialService] Failed to fetch ${endpointId}:`, result.error);
+      return null;
     }
 
+    return result.data;
+  }
+
+  // === Méthode legacy pour les endpoints non-migrés ===
+  private async fetchWithCache<T>(url: string, cacheKey: string, fallbackUrl?: string): Promise<T | null> {
     const tryFetch = async (targetUrl: string): Promise<T | null> => {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        const response = await fetch(targetUrl, { 
+        const response = await fetch(targetUrl, {
           signal: controller.signal,
           headers: {
             'Accept': 'application/json',
           }
         });
-        
+
         clearTimeout(timeoutId);
 
         if (!response.ok) {
           console.warn(`API Warning: ${response.status} for ${targetUrl}`);
           return null;
         }
-        
-        const data = await response.json();
-        this.cache.set(cacheKey, { data, timestamp: Date.now() });
-        return data as T;
+
+        return await response.json() as T;
       } catch (error) {
         if (error instanceof Error) {
           if (error.name === 'AbortError') {
@@ -80,15 +75,13 @@ class TerritorialDataService {
       }
     };
 
-    // Essayer l'URL principale
     let result = await tryFetch(url);
-    
-    // Si échec et fallback disponible, essayer le fallback
+
     if (!result && fallbackUrl) {
       console.log(`[API] Trying fallback URL for ${cacheKey}`);
       result = await tryFetch(fallbackUrl);
     }
-    
+
     return result;
   }
 
@@ -125,18 +118,14 @@ class TerritorialDataService {
 
   // === Vélos en libre-service ===
   async getVeloStations(): Promise<VeloStation[]> {
-    // URL temps réel
-    const url = buildSTARUrl(API_CONFIG.STAR.VELO_STATIONS_REALTIME, 200);
-    // Fallback vers la topologie si temps réel indisponible
-    const fallbackUrl = buildSTARUrl(API_CONFIG.STAR.VELO_STATIONS_TOPOLOGY, 200);
-    
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'velo-stations', fallbackUrl);
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-velo-realtime');
+
     if (!data?.results) {
       console.warn('[Velos] No data received from API');
       return [];
     }
-    
+
     console.log('[Velos] Received', data.results.length, 'records from API');
 
     return data.results
@@ -169,18 +158,14 @@ class TerritorialDataService {
 
   // === Parkings P+R ===
   async getParkingRelais(): Promise<ParkingRelais[]> {
-    // URL temps réel
-    const url = buildSTARUrl(API_CONFIG.STAR.PARKING_REALTIME, 50);
-    // Fallback vers la topologie si temps réel indisponible
-    const fallbackUrl = buildSTARUrl(API_CONFIG.STAR.PARKING_TOPOLOGY, 50);
-    
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'parking-relais', fallbackUrl);
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-parking-realtime');
+
     if (!data?.results) {
       console.warn('[Parkings] No data received from API');
       return [];
     }
-    
+
     console.log('[Parkings] Received', data.results.length, 'records from API');
 
     return data.results
@@ -233,14 +218,14 @@ class TerritorialDataService {
 
   // === Positions des bus en temps réel ===
   async getBusPositions(): Promise<BusPosition[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.BUS_POSITIONS_REALTIME, 500);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'bus-positions');
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-bus-positions');
+
     if (!data?.results) {
       console.warn('[Bus] No data received from API - positions temps réel indisponibles');
       return [];
     }
-    
+
     console.log('[Bus] Received', data.results.length, 'records from API');
 
     return data.results
@@ -254,7 +239,9 @@ class TerritorialDataService {
           lineName: String(record.nomligne || record.ligne || ''),
           destination: String(record.destination || ''),
           coordinates: coords,
-          bearing: record.precisionsituation ? Number(record.precisionsituation) : undefined,
+          // Note: precisionsituation = précision GPS, pas l'orientation
+          // Le champ cap/direction n'existe pas dans l'API STAR actuelle
+          bearing: undefined,
           delay: record.ecartsecondes ? Number(record.ecartsecondes) : undefined,
           lastUpdate: new Date(),
         };
@@ -264,9 +251,9 @@ class TerritorialDataService {
 
   // === Lignes de métro (topologie) ===
   async getMetroLines(): Promise<MetroLine[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.METRO_LINES_TOPOLOGY, 10);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'metro-lines');
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-metro-lines-topo');
+
     if (!data?.results) return [];
 
     return data.results
@@ -288,9 +275,9 @@ class TerritorialDataService {
 
   // === Lignes de bus (topologie) ===
   async getBusLines(): Promise<BusLine[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.BUS_LINES_TOPOLOGY, 200);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'bus-lines');
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-bus-lines-topo');
+
     if (!data?.results) return [];
 
     return data.results
@@ -306,14 +293,14 @@ class TerritorialDataService {
 
   // === Alertes trafic (RÉACTIVÉ avec le bon endpoint) ===
   async getTrafficAlerts(): Promise<TrafficAlert[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.TRAFFIC_ALERTS, 100);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'traffic-alerts');
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-alerts');
+
     if (!data?.results) {
       console.warn('[TrafficAlerts] No data received from API');
       return [];
     }
-    
+
     console.log('[TrafficAlerts] Received', data.results.length, 'alerts from API');
 
     return data.results.map((record): TrafficAlert => {
@@ -405,14 +392,14 @@ class TerritorialDataService {
 
   // === État des lignes de métro ===
   async getMetroLinesStatus(): Promise<MetroLineStatus[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.METRO_LINES_STATUS, 10);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'metro-lines-status');
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-metro-status');
+
     if (!data?.results) {
       console.warn('[MetroLinesStatus] No data received from API');
       return [];
     }
-    
+
     console.log('[MetroLinesStatus] Received', data.results.length, 'lines status from API');
 
     return data.results.map((record): MetroLineStatus => {
@@ -442,14 +429,14 @@ class TerritorialDataService {
 
   // === État des stations de métro ===
   async getMetroStationsStatus(): Promise<MetroStationStatus[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.METRO_STATIONS_REALTIME, 50);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'metro-stations-status');
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-metro-stations');
+
     if (!data?.results) {
       console.warn('[MetroStationsStatus] No data received from API');
       return [];
     }
-    
+
     console.log('[MetroStationsStatus] Received', data.results.length, 'stations status from API');
 
     return data.results.map((record): MetroStationStatus => {
@@ -537,14 +524,14 @@ class TerritorialDataService {
 
   // === Stations de métro (topologie) ===
   async getMetroStations(): Promise<MetroStop[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.METRO_STATIONS_TOPOLOGY, 50);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'metro-stations-topo');
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-metro-stops-topo');
+
     if (!data?.results) {
       console.warn('[MetroStations] No data received from API');
       return [];
     }
-    
+
     console.log('[MetroStations] Received', data.results.length, 'stations from API');
 
     return data.results
@@ -565,14 +552,14 @@ class TerritorialDataService {
 
   // === Communes de Rennes Métropole ===
   async getCommunesMetropole(): Promise<Commune[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.COMMUNES_METROPOLE, 50);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'communes-metropole');
-    
+    // Utilise le manager centralisé
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-communes');
+
     if (!data?.results) {
       console.warn('[Communes] No data received from API');
       return [];
     }
-    
+
     console.log('[Communes] Received', data.results.length, 'communes from API');
 
     return data.results.map((record): Commune => ({
@@ -678,64 +665,22 @@ class TerritorialDataService {
   }
 
   // === Vérifier le statut de toutes les APIs ===
-  async checkAllAPIStatuses(): Promise<APIStatusResult[]> {
-    const results: APIStatusResult[] = [];
-
-    for (const api of API_REGISTRY) {
-      const start = Date.now();
-      try {
-        const response = await fetch(api.url, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-        });
-        
-        const responseTime = Date.now() - start;
-        let recordCount: number | undefined;
-        
-        if (response.ok) {
-          try {
-            const data = await response.json();
-            recordCount = data.total_count;
-          } catch {
-            // Ignore JSON parse errors
-          }
-        }
-
-        const result: APIStatusResult = {
-          id: api.id,
-          name: api.name,
-          status: response.ok ? 'online' : 'error',
-          responseTime,
-          lastCheck: new Date(),
-          recordCount,
-        };
-        
-        this.apiStatuses.set(api.id, result);
-        results.push(result);
-      } catch {
-        const result: APIStatusResult = {
-          id: api.id,
-          name: api.name,
-          status: 'offline',
-          responseTime: Date.now() - start,
-          lastCheck: new Date(),
-        };
-        this.apiStatuses.set(api.id, result);
-        results.push(result);
-      }
-    }
-
-    return results;
+  // Délégué au apiConnectionManager centralisé
+  async checkAllAPIStatuses() {
+    await apiManager.checkAllEndpoints();
+    return apiManager.getHealthStatus();
   }
 
   // === Obtenir le dernier statut des APIs ===
-  getAPIStatuses(): APIStatusResult[] {
-    return Array.from(this.apiStatuses.values());
+  // Délégué au apiConnectionManager centralisé
+  getAPIStatuses() {
+    return apiManager.getHealthStatus();
   }
 
   // === Vider le cache ===
+  // Délégué au apiConnectionManager centralisé
   clearCache(): void {
-    this.cache.clear();
+    apiManager.clearCache();
   }
 }
 

@@ -69,9 +69,12 @@ export default function DGCLDashboard({ stats, alerts, loading }: DGCLDashboardP
     loadMetroData();
   }, [loadMetroData]);
 
+  // Type pour les compétences enrichies
+  type EnrichedCompetency = DGCLCompetency & { legalCompliance?: LegalComplianceIndicator[] };
+
   // Enrichir les compétences avec les données temps réel
-  const enrichedCompetencies = useMemo(() => {
-    return DGCL_COMPETENCIES.map(comp => {
+  const enrichedCompetencies = useMemo((): EnrichedCompetency[] => {
+    return DGCL_COMPETENCIES.map((comp): EnrichedCompetency => {
       // Données transport temps réel
       if (comp.id === 'energie-transports' && stats) {
         return {

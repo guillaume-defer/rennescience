@@ -113,7 +113,8 @@ export const API_CONFIG = {
   // === SNCF ===
   SNCF: {
     BASE_URL: 'https://api.sncf.com/v1',
-    API_KEY: '28b87afe-3e19-4e32-a180-e23d936240b7',
+    // API key moved to environment variable for security
+    API_KEY: import.meta.env.VITE_SNCF_API_KEY || '',
   },
   
   // === Environnement ===

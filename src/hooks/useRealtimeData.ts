@@ -54,7 +54,7 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
   // === Chargement des données statiques (une seule fois) ===
   const loadStaticData = useCallback(async () => {
     if (staticDataLoadedRef.current) return;
-    
+
     try {
       const [metro, bus, metroStops, busStopsData, communesData] = await Promise.all([
         territorialDataService.getMetroLines(),
@@ -63,6 +63,14 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
         territorialDataService.getBusStops(),
         territorialDataService.getCommunesMetropole(),
       ]);
+
+      // Vérifier qu'on a des données critiques avant de marquer comme chargé
+      const hasMinimalData = metro.length > 0 || metroStops.length > 0;
+      if (!hasMinimalData) {
+        console.warn('[StaticData] No data received, will retry on next refresh');
+        return; // Ne pas marquer comme chargé - permettre retry
+      }
+
       setMetroLines(metro);
       setBusLines(bus);
       setMetroStations(metroStops);
@@ -77,7 +85,8 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
         communes: communesData.length,
       });
     } catch (err) {
-      console.error('Error loading static data:', err);
+      console.error('[StaticData] Error loading, will retry:', err);
+      // Ne PAS marquer comme chargé - permettre retry au prochain refresh
     }
   }, []);
 

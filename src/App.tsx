@@ -37,7 +37,6 @@ function App() {
   const { summary } = useAPIMonitor(true);
 
   // busStops disponible via useRealtimeData() pour usage futur
-  void busLines; // Utilisé pour éviter l'erreur TS6133
 
   const handleNavigation = useCallback((view: NavigationView) => {
     setCurrentView(view);
