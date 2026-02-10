@@ -45,6 +45,7 @@ interface LayerVisibility {
   parkings: boolean;
   buses: boolean;
   metro: boolean;
+  busLines: boolean;
   metroStations: boolean;
   communes: boolean;
 }
@@ -54,6 +55,7 @@ export default function TerritorialMap({
   parkings,
   busPositions,
   metroLines,
+  busLines,
   metroStations,
   communes,
   alerts,
@@ -76,6 +78,7 @@ export default function TerritorialMap({
     parkings: 0,
     buses: 0,
     metro: 0,
+    busLines: 0,
     metroStations: 0,
     communes: 0,
   });
@@ -85,6 +88,7 @@ export default function TerritorialMap({
     parkings: true,
     buses: true,
     metro: true,
+    busLines: false, // Désactivé par défaut pour les performances (beaucoup de lignes)
     metroStations: true,
     communes: true,
   });
@@ -218,6 +222,173 @@ export default function TerritorialMap({
       console.warn('[Metro] Visibility error:', e);
     }
   }, [mapLoaded, layerVisibility.metro]);
+
+  // === Mise à jour des couches lignes de bus ===
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    console.log('[BusLines] Processing', busLines.length, 'lines');
+
+    // Supprimer les sources/couches existantes
+    try {
+      if (map.current.getLayer('bus-lines-outline')) {
+        map.current.removeLayer('bus-lines-outline');
+      }
+      if (map.current.getLayer('bus-lines')) {
+        map.current.removeLayer('bus-lines');
+      }
+      if (map.current.getSource('bus-lines-source')) {
+        map.current.removeSource('bus-lines-source');
+      }
+    } catch (e) {
+      console.warn('[BusLines] Error removing layers:', e);
+    }
+
+    if (busLines.length === 0) {
+      setDataStatus(prev => ({ ...prev, busLines: 0 }));
+      return;
+    }
+
+    const validLines = busLines.filter(line => line.geometry);
+    console.log('[BusLines] Valid lines with geometry:', validLines.length);
+
+    if (validLines.length === 0) return;
+
+    const busLinesGeoJSON: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: validLines.map(line => ({
+        type: 'Feature' as const,
+        properties: {
+          id: line.id,
+          name: line.name,
+          shortName: line.shortName,
+          color: line.color.startsWith('#') ? line.color : `#${line.color}`,
+        },
+        geometry: line.geometry,
+      })),
+    };
+
+    try {
+      map.current.addSource('bus-lines-source', {
+        type: 'geojson',
+        data: busLinesGeoJSON,
+      });
+
+      // Outline pour la lisibilité
+      map.current.addLayer({
+        id: 'bus-lines-outline',
+        type: 'line',
+        source: 'bus-lines-source',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+          visibility: layerVisibility.busLines ? 'visible' : 'none',
+        },
+        paint: {
+          'line-color': '#000000',
+          'line-width': 4,
+          'line-opacity': 0.4,
+        },
+      });
+
+      // Ligne principale avec couleur
+      map.current.addLayer({
+        id: 'bus-lines',
+        type: 'line',
+        source: 'bus-lines-source',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+          visibility: layerVisibility.busLines ? 'visible' : 'none',
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 2.5,
+          'line-opacity': 0.8,
+        },
+      });
+
+      // Ajouter popup au clic sur les lignes de bus
+      const handleBusLineClick = (e: maplibregl.MapLayerMouseEvent) => {
+        if (!map.current || !e.features || e.features.length === 0) return;
+        const props = e.features[0].properties;
+        if (!props) return;
+
+        new maplibregl.Popup({ closeButton: false, className: 'palantir-popup' })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div style="padding: 12px; min-width: 160px; background: #151b23; border-radius: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <div style="
+                  width: 24px;
+                  height: 24px;
+                  border-radius: 4px;
+                  background: ${props.color};
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                ">
+                  <span style="color: white; font-weight: bold; font-size: 10px;">${props.shortName}</span>
+                </div>
+                <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px;">Ligne ${props.shortName}</h4>
+              </div>
+              <p style="font-size: 12px; color: #7d8590;">${props.name}</p>
+            </div>
+          `)
+          .addTo(map.current);
+      };
+
+      const handleBusLineMouseEnter = () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+      };
+
+      const handleBusLineMouseLeave = () => {
+        if (map.current) map.current.getCanvas().style.cursor = '';
+      };
+
+      map.current.on('click', 'bus-lines', handleBusLineClick);
+      map.current.on('mouseenter', 'bus-lines', handleBusLineMouseEnter);
+      map.current.on('mouseleave', 'bus-lines', handleBusLineMouseLeave);
+
+      setDataStatus(prev => ({ ...prev, busLines: validLines.length }));
+      console.log('[BusLines] Layer added successfully');
+
+      // Cleanup
+      return () => {
+        if (map.current) {
+          map.current.off('click', 'bus-lines', handleBusLineClick);
+          map.current.off('mouseenter', 'bus-lines', handleBusLineMouseEnter);
+          map.current.off('mouseleave', 'bus-lines', handleBusLineMouseLeave);
+        }
+      };
+    } catch (e) {
+      console.error('[BusLines] Error adding layer:', e);
+    }
+
+  }, [mapLoaded, busLines]);
+
+  // Mise à jour visibilité lignes de bus
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    try {
+      if (map.current.getLayer('bus-lines')) {
+        map.current.setLayoutProperty(
+          'bus-lines',
+          'visibility',
+          layerVisibility.busLines ? 'visible' : 'none'
+        );
+      }
+      if (map.current.getLayer('bus-lines-outline')) {
+        map.current.setLayoutProperty(
+          'bus-lines-outline',
+          'visibility',
+          layerVisibility.busLines ? 'visible' : 'none'
+        );
+      }
+    } catch (e) {
+      console.warn('[BusLines] Visibility error:', e);
+    }
+  }, [mapLoaded, layerVisibility.busLines]);
 
   // Fonction utilitaire pour nettoyer les marqueurs
   const clearMarkers = (markers: maplibregl.Marker[]) => {
@@ -899,7 +1070,7 @@ export default function TerritorialMap({
             <Layers className="w-4 h-4 text-palantir-accent" />
             <span className="text-sm font-medium">Couches</span>
             <span className="ml-auto text-xs text-palantir-text-muted">
-              {dataStatus.velos + dataStatus.parkings + dataStatus.buses + dataStatus.metro + dataStatus.metroStations + dataStatus.communes}
+              {dataStatus.velos + dataStatus.parkings + dataStatus.buses + dataStatus.metro + dataStatus.busLines + dataStatus.metroStations + dataStatus.communes}
             </span>
           </button>
 
@@ -920,6 +1091,14 @@ export default function TerritorialMap({
                 onClick={() => toggleLayer('metroStations')}
                 color="text-orange-400"
                 count={dataStatus.metroStations}
+              />
+              <LayerToggle
+                icon={Bus}
+                label="Lignes de bus"
+                active={layerVisibility.busLines}
+                onClick={() => toggleLayer('busLines')}
+                color="text-amber-400"
+                count={dataStatus.busLines}
               />
               <LayerToggle
                 icon={Bike}
