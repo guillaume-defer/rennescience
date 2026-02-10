@@ -273,22 +273,51 @@ class TerritorialDataService {
       });
   }
 
-  // === Lignes de bus (topologie) ===
+  // === Lignes de bus (tracés géométriques) ===
   async getBusLines(): Promise<BusLine[]> {
-    // Utilise le manager centralisé
-    const data = await this.fetchFromManager<Record<string, unknown>>('star-bus-lines-topo');
+    // Utilise le manager centralisé - endpoint parcours avec géométrie
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-bus-routes-topo');
 
-    if (!data?.results) return [];
+    if (!data?.results) {
+      console.warn('[BusLines] No data received from API');
+      return [];
+    }
 
-    return data.results
-      .filter(record => record.geo_shape)
-      .map((record): BusLine => ({
-        id: String(record.id || ''),
-        name: String(record.nomlong || ''),
-        shortName: String(record.nomcourt || ''),
-        color: String(record.couleurligne || '#6b7280'),
-        geometry: record.geo_shape as GeoJSON.LineString | GeoJSON.MultiLineString,
-      }));
+    console.log('[BusLines] Received', data.results.length, 'routes from API');
+
+    // Grouper les parcours par ligne pour éviter les doublons
+    const lineMap = new Map<string, BusLine>();
+
+    data.results.forEach(record => {
+      // Extraire la géométrie du champ 'parcours'
+      const parcours = record.parcours as { geometry?: GeoJSON.LineString } | undefined;
+      if (!parcours?.geometry) return;
+
+      const lineId = String(record.idligne || record.route_id || '');
+      const shortName = String(record.nomcourtligne || '');
+
+      // Ne garder qu'un parcours principal par ligne (aller)
+      if (lineMap.has(lineId)) return;
+
+      // Normaliser la couleur
+      let color = String(record.couleurtrace || '#6b7280');
+      if (!color.startsWith('#')) {
+        color = `#${color}`;
+      }
+
+      lineMap.set(lineId, {
+        id: lineId,
+        name: String(record.libellelong || shortName || ''),
+        shortName,
+        color,
+        geometry: parcours.geometry,
+      });
+    });
+
+    const lines = Array.from(lineMap.values());
+    console.log('[BusLines] Processed', lines.length, 'unique lines with geometry');
+
+    return lines;
   }
 
   // === Alertes trafic (RÉACTIVÉ avec le bon endpoint) ===
