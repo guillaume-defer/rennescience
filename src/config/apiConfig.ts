@@ -124,7 +124,15 @@ export const API_CONFIG = {
   },
   
   AIR_BREIZH: {
-    BASE_URL: 'https://data.airbreizh.asso.fr/api/v1',
+    BASE_URL: 'http://data.airbreizh.asso.fr',
+    GEOSERVER_WFS: '/geoserver/ows',
+    GEOCATALOG: '/geonetwork/srv/fre/catalog.search',
+    // Air quality data layers (via WFS)
+    LAYERS: {
+      STATIONS: 'airbreizh:stations',
+      MESURES: 'airbreizh:mesures',
+      INDICES: 'airbreizh:indices_qualite_air',
+    },
   },
   
   HUB_EAU: {
@@ -137,6 +145,20 @@ export const API_CONFIG = {
   IRVE: {
     BASE_URL: 'https://opendata.reseaux-energies.fr/api/explore/v2.1/catalog/datasets',
     BORNES: 'bornes-irve',
+  },
+
+  // === ODRE - Open Data Réseaux Énergies (RTE + Enedis + Gas) ===
+  ODRE: {
+    BASE_URL: 'https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets',
+    // Consommation
+    CONSO_DEPARTEMENT_ANNUELLE: 'conso-departement-annuelle',
+    CONSO_REGION_ANNUELLE: 'soutirages-regionaux-quotidiens-consolides-rpt',
+    // Production
+    PROD_REGION_ENR: 'prod-region-annuelle-enr',
+    PARC_REGION_PRODUCTION: 'parc-region-annuel-production-filiere',
+    // Installations
+    INSTALLATIONS_PRODUCTION: 'nombre-installation-production-stockage-electricite',
+    REGISTRE_INSTALLATIONS: 'registre-national-installation-production-stockage-electricite-agrege-311223',
   },
   
   // === Urbanisme / Logement ===
