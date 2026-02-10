@@ -724,37 +724,53 @@ export default function TerritorialMap({
         },
       });
 
-      // Popup au survol
-      map.current.on('mouseenter', layerId, (e) => {
-        if (e.features && e.features[0]) {
-          map.current!.getCanvas().style.cursor = 'pointer';
+      // Event handlers - stockés pour cleanup
+      const handleMouseEnter = () => {
+        if (map.current) {
+          map.current.getCanvas().style.cursor = 'pointer';
         }
-      });
+      };
 
-      map.current.on('mouseleave', layerId, () => {
-        map.current!.getCanvas().style.cursor = '';
-      });
+      const handleMouseLeave = () => {
+        if (map.current) {
+          map.current.getCanvas().style.cursor = '';
+        }
+      };
 
-      map.current.on('click', layerId, (e) => {
-        if (e.features && e.features[0]) {
-          const props = e.features[0].properties;
-          new maplibregl.Popup({ closeButton: false, className: 'palantir-popup' })
-            .setLngLat(e.lngLat)
-            .setHTML(`
-              <div style="padding: 12px; min-width: 160px; background: #151b23; border-radius: 8px;">
-                <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 6px;">📍 ${props.name}</h4>
-                <div style="font-size: 12px; color: #7d8590;">
-                  Code INSEE: ${props.code}
-                  ${props.population ? `<br/>Population: ${Number(props.population).toLocaleString('fr-FR')}` : ''}
-                </div>
+      const handleClick = (e: maplibregl.MapLayerMouseEvent) => {
+        if (!map.current || !e.features || e.features.length === 0) return;
+        const props = e.features[0].properties;
+        if (!props) return;
+
+        new maplibregl.Popup({ closeButton: false, className: 'palantir-popup' })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div style="padding: 12px; min-width: 160px; background: #151b23; border-radius: 8px;">
+              <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 6px;">📍 ${props.name}</h4>
+              <div style="font-size: 12px; color: #7d8590;">
+                Code INSEE: ${props.code}
+                ${props.population ? `<br/>Population: ${Number(props.population).toLocaleString('fr-FR')}` : ''}
               </div>
-            `)
-            .addTo(map.current!);
-        }
-      });
+            </div>
+          `)
+          .addTo(map.current);
+      };
+
+      map.current.on('mouseenter', layerId, handleMouseEnter);
+      map.current.on('mouseleave', layerId, handleMouseLeave);
+      map.current.on('click', layerId, handleClick);
 
       setDataStatus(prev => ({ ...prev, communes: geojson.features.length }));
       console.log('[Communes] Added', geojson.features.length, 'polygons');
+
+      // Cleanup: retirer les event listeners
+      return () => {
+        if (map.current) {
+          map.current.off('mouseenter', layerId, handleMouseEnter);
+          map.current.off('mouseleave', layerId, handleMouseLeave);
+          map.current.off('click', layerId, handleClick);
+        }
+      };
 
     } catch (e) {
       console.error('[Communes] Error adding layer:', e);

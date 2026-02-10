@@ -36,7 +36,7 @@ interface APIStatusResult {
 // === Classe de service principale ===
 class TerritorialDataService {
   private cache: Map<string, { data: unknown; timestamp: number }> = new Map();
-  private cacheTTL = 30000; // 30 secondes
+  private cacheTTL = 25000; // 25 secondes (< refresh interval de 30s pour éviter données stales)
   private apiStatuses: Map<string, APIStatusResult> = new Map();
 
   // === Méthode générique de fetch avec cache et gestion d'erreur robuste ===
@@ -254,7 +254,9 @@ class TerritorialDataService {
           lineName: String(record.nomligne || record.ligne || ''),
           destination: String(record.destination || ''),
           coordinates: coords,
-          bearing: record.precisionsituation ? Number(record.precisionsituation) : undefined,
+          // Note: precisionsituation = précision GPS, pas l'orientation
+          // Le champ cap/direction n'existe pas dans l'API STAR actuelle
+          bearing: undefined,
           delay: record.ecartsecondes ? Number(record.ecartsecondes) : undefined,
           lastUpdate: new Date(),
         };
