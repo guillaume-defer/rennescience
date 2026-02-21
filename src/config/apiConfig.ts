@@ -124,7 +124,7 @@ export const API_CONFIG = {
   },
   
   AIR_BREIZH: {
-    BASE_URL: 'http://data.airbreizh.asso.fr',
+    BASE_URL: 'https://data.airbreizh.asso.fr',
     GEOSERVER_WFS: '/geoserver/ows',
     GEOCATALOG: '/geonetwork/srv/fre/catalog.search',
     // Air quality data layers (via WFS)

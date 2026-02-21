@@ -4,6 +4,7 @@
  */
 
 import { API_CONFIG } from '../config/apiConfig';
+import { logger } from '../utils/logger';
 
 // === Types ===
 export type APIStatus = 'online' | 'offline' | 'degraded' | 'unknown' | 'checking';
@@ -211,10 +212,11 @@ export const API_ENDPOINTS: APIEndpointConfig[] = [
   {
     id: 'star-bus-routes-topo',
     name: 'Tracés Bus',
-    description: 'Géométrie des parcours de bus',
+    description: 'Géométrie des parcours de bus (sens aller uniquement)',
     category: 'transport',
     baseUrl: API_CONFIG.STAR.BASE_URL,
-    endpoint: `${API_CONFIG.STAR.BUS_ROUTES_TOPOLOGY}/records?limit=600`,
+    // Filter server-side: only fetch "aller" direction routes to halve the number of records
+    endpoint: `${API_CONFIG.STAR.BUS_ROUTES_TOPOLOGY}/records?limit=300&where=sens%3D'A'`,
     method: 'GET',
     requiresAuth: false,
     timeout: 20000,
@@ -437,22 +439,41 @@ class APIConnectionManager {
   // === Public Methods ===
 
   /**
-   * Start automatic health checks
+   * Start automatic health checks with deferred, batched startup to reduce initial load
    */
   startMonitoring(intervalMs: number = 60000): void {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
     }
 
-    // Initial check
-    this.checkAllEndpoints();
+    // Defer and batch startup checks by priority to avoid hammering all APIs at once
+    this.scheduleBatchedStartupChecks();
 
-    // Periodic checks
+    // Periodic checks (full scan)
     this.checkInterval = setInterval(() => {
       this.checkAllEndpoints();
     }, intervalMs);
 
-    console.log('[APIManager] Monitoring started with interval:', intervalMs, 'ms');
+    logger.debug('[APIManager] Monitoring started with interval:', intervalMs, 'ms');
+  }
+
+  /**
+   * Schedule startup health checks in priority batches to reduce initial network burst
+   */
+  private scheduleBatchedStartupChecks(): void {
+    const priorityOrder: Array<APIEndpointConfig['priority']> = ['critical', 'high', 'medium', 'low'];
+    const batchDelaysMs = [3000, 8000, 15000, 25000]; // staggered delays per priority tier
+
+    priorityOrder.forEach((priority, index) => {
+      const delay = batchDelaysMs[index];
+      setTimeout(() => {
+        const batch = API_ENDPOINTS.filter(e => e.isEnabled && e.priority === priority);
+        if (batch.length > 0) {
+          logger.debug(`[APIManager] Checking ${priority} endpoints (${batch.length} total)`);
+          Promise.allSettled(batch.map(e => this.checkEndpoint(e.id)));
+        }
+      }, delay);
+    });
   }
 
   /**
@@ -463,7 +484,7 @@ class APIConnectionManager {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
     }
-    console.log('[APIManager] Monitoring stopped');
+    logger.debug('[APIManager] Monitoring stopped');
   }
 
   /**
@@ -628,7 +649,7 @@ class APIConnectionManager {
    * Check all endpoints
    */
   async checkAllEndpoints(): Promise<Map<string, APIHealthStatus>> {
-    console.log('[APIManager] Checking all endpoints...');
+    logger.debug('[APIManager] Checking all endpoints...');
 
     const promises = API_ENDPOINTS
       .filter(e => e.isEnabled)
@@ -695,7 +716,7 @@ class APIConnectionManager {
    */
   clearCache(): void {
     this.cache.clear();
-    console.log('[APIManager] Cache cleared');
+    logger.debug('[APIManager] Cache cleared');
   }
 
   // === Private Methods ===
