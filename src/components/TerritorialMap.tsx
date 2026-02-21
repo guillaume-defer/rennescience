@@ -662,35 +662,65 @@ export default function TerritorialMap({
       return;
     }
 
+    // Create lookup map for line colors
+    const lineColorMap = new Map<string, string>();
+    busLines.forEach(line => {
+      lineColorMap.set(line.id, line.color);
+      lineColorMap.set(line.shortName, line.color);
+      lineColorMap.set(line.name, line.color);
+    });
+
     // Limiter le nombre de bus pour les performances
     const busesToShow = busPositions.slice(0, 150);
 
     busesToShow.forEach(bus => {
-      if (!bus.coordinates || 
-          !Array.isArray(bus.coordinates) || 
+      if (!bus.coordinates ||
+          !Array.isArray(bus.coordinates) ||
           bus.coordinates.length !== 2 ||
-          isNaN(bus.coordinates[0]) || 
+          isNaN(bus.coordinates[0]) ||
           isNaN(bus.coordinates[1])) {
         return;
       }
 
+      // Get line color from map, default to orange
+      const lineColor = lineColorMap.get(bus.lineId) ||
+                       lineColorMap.get(bus.lineName) ||
+                       '#f59e0b';
+      const lineName = escapeHTML((bus.lineName || bus.lineId || '?').slice(0, 4));
+
       const el = document.createElement('div');
       el.className = 'bus-marker';
-      el.style.cssText = 'cursor: pointer;';
+      el.style.cssText = 'cursor: pointer; position: relative;';
+
+      // Bus tracker style: circle indicator + pill badge with line number
       el.innerHTML = `
         <div style="
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: rgba(147, 51, 234, 0.85);
-          border: 2px solid #a855f7;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
           display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: center;
-          transition: transform 0.2s;
+          transform: translateY(-50%);
         ">
-          <span style="color: white; font-size: 9px; font-weight: bold;">${escapeHTML((bus.lineName || bus.lineId || '?').slice(0, 3))}</span>
+          <div style="
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: ${sanitizeCSSColor(lineColor)};
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            margin-bottom: 2px;
+          "></div>
+          <div style="
+            background: ${sanitizeCSSColor(lineColor)};
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+            white-space: nowrap;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.3);
+          ">${lineName}</div>
         </div>
       `;
 
@@ -701,19 +731,29 @@ export default function TerritorialMap({
         : '';
 
       const popup = new maplibregl.Popup({
-        offset: 15,
+        offset: 25,
         closeButton: false,
         className: 'palantir-popup'
       }).setHTML(`
         <div style="padding: 10px; min-width: 160px; background: #151b23; border-radius: 8px;">
-          <h4 style="font-weight: 600; color: #e6edf3; font-size: 13px;">Ligne ${escapeHTML(bus.lineName || bus.lineId)}</h4>
-          <p style="color: #7d8590; font-size: 12px; margin-top: 4px;">→ ${escapeHTML(bus.destination || 'Destination inconnue')}</p>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="
+              background: ${sanitizeCSSColor(lineColor)};
+              color: white;
+              font-weight: 700;
+              padding: 2px 8px;
+              border-radius: 8px;
+              font-size: 12px;
+            ">${lineName}</span>
+            <span style="color: #e6edf3; font-size: 13px; font-weight: 500;">Bus</span>
+          </div>
+          <p style="color: #7d8590; font-size: 12px; margin-top: 6px;">→ ${escapeHTML(bus.destination || 'Destination inconnue')}</p>
           ${delayText ? `<p style="font-size: 11px; margin-top: 4px;">${delayText}</p>` : ''}
         </div>
       `);
 
       try {
-        const marker = new maplibregl.Marker({ element: el })
+        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat(bus.coordinates)
           .setPopup(popup)
           .addTo(map.current!);
@@ -727,7 +767,7 @@ export default function TerritorialMap({
     setDataStatus(prev => ({ ...prev, buses: busMarkersRef.current.length }));
     console.log('[Bus] Added', busMarkersRef.current.length, 'markers');
 
-  }, [mapLoaded, busPositions, layerVisibility.buses]);
+  }, [mapLoaded, busPositions, busLines, layerVisibility.buses]);
 
   // Mise à jour des marqueurs stations de métro
   useEffect(() => {
