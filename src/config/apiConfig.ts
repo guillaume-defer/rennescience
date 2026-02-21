@@ -93,7 +93,7 @@ export const API_CONFIG = {
     
     // Environnement
     ARBRES: 'arbres-dornement-rennes',
-    ESPACES_VERTS: 'espaces-verts-rennes',
+    ESPACES_VERTS: 'espaces_verts',
     
     // Déchets
     DECHETTERIES: 'dechetteries-rennes-metropole',
@@ -143,7 +143,7 @@ export const API_CONFIG = {
   
   // === Énergie ===
   IRVE: {
-    BASE_URL: 'https://opendata.reseaux-energies.fr/api/explore/v2.1/catalog/datasets',
+    BASE_URL: 'https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets',
     BORNES: 'bornes-irve',
   },
 
