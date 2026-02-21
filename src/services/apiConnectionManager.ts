@@ -410,6 +410,37 @@ export const API_ENDPOINTS: APIEndpointConfig[] = [
     isEnabled: true,
     priority: 'low',
   },
+  // === STAR Fréquentation & Tarifs ===
+  {
+    id: 'star-frequentation',
+    name: 'Fréquentation Max',
+    description: 'Fréquentation maximale par ligne STAR',
+    category: 'transport',
+    baseUrl: API_CONFIG.STAR.BASE_URL,
+    endpoint: `${API_CONFIG.STAR.FREQUENTATION_MAX_LIGNE}/records?limit=100`,
+    method: 'GET',
+    requiresAuth: false,
+    timeout: 15000,
+    retryCount: 2,
+    cacheTTL: 3600000,
+    isEnabled: true,
+    priority: 'low',
+  },
+  {
+    id: 'star-tarifs',
+    name: 'Tarifs STAR',
+    description: 'Grille tarifaire STAR',
+    category: 'transport',
+    baseUrl: API_CONFIG.STAR.BASE_URL,
+    endpoint: `${API_CONFIG.STAR.TARIFS}/records?limit=300`,
+    method: 'GET',
+    requiresAuth: false,
+    timeout: 15000,
+    retryCount: 2,
+    cacheTTL: 86400000,
+    isEnabled: true,
+    priority: 'low',
+  },
 ];
 
 // === API Connection Manager Class ===

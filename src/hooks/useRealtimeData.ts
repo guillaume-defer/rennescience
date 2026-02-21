@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { territorialDataService } from '../services/territorialDataService';
-import type { 
-  VeloStation, 
-  ParkingRelais, 
-  BusPosition, 
+import type {
+  VeloStation,
+  ParkingRelais,
+  BusPosition,
   TrafficAlert,
   DashboardStats,
   MetroLine,
@@ -13,6 +13,7 @@ import type {
   Commune,
 } from '../types';
 import { REFRESH_INTERVALS } from '../config/apiConfig';
+import { logger } from '../utils/logger';
 
 // === Types pour le hook ===
 interface UseRealtimeDataResult {
@@ -50,6 +51,7 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
   
   const intervalRef = useRef<number | null>(null);
   const staticDataLoadedRef = useRef(false);
+  const staticRetryRef = useRef(0);
 
   // === Chargement des données statiques (une seule fois) ===
   const loadStaticData = useCallback(async () => {
@@ -65,10 +67,17 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
       ]);
 
       // Vérifier qu'on a des données critiques avant de marquer comme chargé
-      const hasMinimalData = metro.length > 0 || metroStops.length > 0;
+      const hasMinimalData =
+        metro.length > 0 || metroStops.length > 0 || communesData.length > 0 || bus.length > 0;
       if (!hasMinimalData) {
-        console.warn('[StaticData] No data received, will retry on next refresh');
-        return; // Ne pas marquer comme chargé - permettre retry
+        staticRetryRef.current += 1;
+        if (staticRetryRef.current >= 3) {
+          logger.warn('[StaticData] No data after 3 attempts, marking as loaded to prevent silent loop');
+          staticDataLoadedRef.current = true;
+        } else {
+          logger.warn('[StaticData] No data received, will retry on next refresh');
+        }
+        return;
       }
 
       setMetroLines(metro);
@@ -77,7 +86,7 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
       setBusStops(busStopsData);
       setCommunes(communesData);
       staticDataLoadedRef.current = true;
-      console.log('[StaticData] Loaded:', {
+      logger.debug('[StaticData] Loaded:', {
         metroLines: metro.length,
         busLines: bus.length,
         metroStations: metroStops.length,
@@ -85,7 +94,7 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
         communes: communesData.length,
       });
     } catch (err) {
-      console.error('[StaticData] Error loading, will retry:', err);
+      logger.error('[StaticData] Error loading, will retry:', err);
       // Ne PAS marquer comme chargé - permettre retry au prochain refresh
     }
   }, []);
@@ -109,7 +118,7 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
       setLastUpdate(new Date());
       setError(null);
     } catch (err) {
-      console.error('Error loading realtime data:', err);
+      logger.error('[RealtimeData] Error loading realtime data:', err);
       setError('Erreur de chargement des données');
     }
   }, []);
@@ -137,7 +146,7 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
         clearInterval(intervalRef.current);
       }
     };
-  }, [refresh, loadRealtimeData, autoRefresh]);
+  }, [refresh, autoRefresh]);
 
   return {
     veloStations,
@@ -157,22 +166,3 @@ export function useRealtimeData(autoRefresh: boolean = true): UseRealtimeDataRes
   };
 }
 
-// === Hook pour une seule station vélo ===
-export function useVeloStation(stationId: string) {
-  const { veloStations, loading, error } = useRealtimeData();
-  const station = veloStations.find(s => s.id === stationId);
-  return { station, loading, error };
-}
-
-// === Hook pour un seul parking ===
-export function useParking(parkingId: string) {
-  const { parkings, loading, error } = useRealtimeData();
-  const parking = parkings.find(p => p.id === parkingId);
-  return { parking, loading, error };
-}
-
-// === Hook pour les statistiques seules ===
-export function useDashboardStats() {
-  const { stats, loading, error, lastUpdate, refresh } = useRealtimeData();
-  return { stats, loading, error, lastUpdate, refresh };
-}

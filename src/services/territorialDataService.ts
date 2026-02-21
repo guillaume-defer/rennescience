@@ -1,5 +1,6 @@
 import { buildSTARUrl, buildRennesMetropoleUrl, API_CONFIG } from '../config/apiConfig';
 import { apiManager, type APIConnectionResult } from './apiConnectionManager';
+import { logger } from '../utils/logger';
 import type {
   VeloStation,
   ParkingRelais,
@@ -34,7 +35,7 @@ class TerritorialDataService {
     const result: APIConnectionResult<OpenDataSoftResponse<T>> = await apiManager.fetch<OpenDataSoftResponse<T>>(endpointId);
 
     if (!result.success) {
-      console.warn(`[TerritorialService] Failed to fetch ${endpointId}:`, result.error);
+      logger.warn(`[TerritorialService] Failed to fetch ${endpointId}:`, result.error);
       return null;
     }
 
@@ -58,7 +59,7 @@ class TerritorialDataService {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          console.warn(`API Warning: ${response.status} for ${targetUrl}`);
+          logger.warn(`[TerritorialService] API Warning: ${response.status} for ${targetUrl}`);
           return null;
         }
 
@@ -66,9 +67,9 @@ class TerritorialDataService {
       } catch (error) {
         if (error instanceof Error) {
           if (error.name === 'AbortError') {
-            console.warn(`API Timeout for ${targetUrl}`);
+            logger.warn(`[TerritorialService] API Timeout for ${targetUrl}`);
           } else {
-            console.warn(`Fetch error for ${targetUrl}:`, error.message);
+            logger.warn(`[TerritorialService] Fetch error for ${targetUrl}:`, error.message);
           }
         }
         return null;
@@ -78,7 +79,7 @@ class TerritorialDataService {
     let result = await tryFetch(url);
 
     if (!result && fallbackUrl) {
-      console.log(`[API] Trying fallback URL for ${cacheKey}`);
+      logger.debug(`[API] Trying fallback URL for ${cacheKey}`);
       result = await tryFetch(fallbackUrl);
     }
 
@@ -122,11 +123,11 @@ class TerritorialDataService {
     const data = await this.fetchFromManager<Record<string, unknown>>('star-velo-realtime');
 
     if (!data?.results) {
-      console.warn('[Velos] No data received from API');
+      logger.warn('[Velos] No data received from API');
       return [];
     }
 
-    console.log('[Velos] Received', data.results.length, 'records from API');
+    logger.debug('[Velos] Received', data.results.length, 'records from API');
 
     return data.results
       .map((record): VeloStation | null => {
@@ -162,11 +163,11 @@ class TerritorialDataService {
     const data = await this.fetchFromManager<Record<string, unknown>>('star-parking-realtime');
 
     if (!data?.results) {
-      console.warn('[Parkings] No data received from API');
+      logger.warn('[Parkings] No data received from API');
       return [];
     }
 
-    console.log('[Parkings] Received', data.results.length, 'records from API');
+    logger.debug('[Parkings] Received', data.results.length, 'records from API');
 
     return data.results
       .map((record): ParkingRelais | null => {
@@ -222,11 +223,11 @@ class TerritorialDataService {
     const data = await this.fetchFromManager<Record<string, unknown>>('star-bus-positions');
 
     if (!data?.results) {
-      console.warn('[Bus] No data received from API - positions temps réel indisponibles');
+      logger.warn('[Bus] No data received from API - positions temps réel indisponibles');
       return [];
     }
 
-    console.log('[Bus] Received', data.results.length, 'records from API');
+    logger.debug('[Bus] Received', data.results.length, 'records from API');
 
     return data.results
       .map((record): BusPosition | null => {
@@ -279,11 +280,11 @@ class TerritorialDataService {
     const data = await this.fetchFromManager<Record<string, unknown>>('star-bus-routes-topo');
 
     if (!data?.results) {
-      console.warn('[BusLines] No data received from API');
+      logger.warn('[BusLines] No data received from API');
       return [];
     }
 
-    console.log('[BusLines] Received', data.results.length, 'routes from API');
+    logger.debug('[BusLines] Received', data.results.length, 'routes from API');
 
     // Grouper les parcours par ligne pour éviter les doublons
     const lineMap = new Map<string, BusLine>();
@@ -315,7 +316,7 @@ class TerritorialDataService {
     });
 
     const lines = Array.from(lineMap.values());
-    console.log('[BusLines] Processed', lines.length, 'unique lines with geometry');
+    logger.debug('[BusLines] Processed', lines.length, 'unique lines with geometry');
 
     return lines;
   }
@@ -326,11 +327,11 @@ class TerritorialDataService {
     const data = await this.fetchFromManager<Record<string, unknown>>('star-alerts');
 
     if (!data?.results) {
-      console.warn('[TrafficAlerts] No data received from API');
+      logger.warn('[TrafficAlerts] No data received from API');
       return [];
     }
 
-    console.log('[TrafficAlerts] Received', data.results.length, 'alerts from API');
+    logger.debug('[TrafficAlerts] Received', data.results.length, 'alerts from API');
 
     return data.results.map((record): TrafficAlert => {
       // Déterminer la sévérité basée sur le niveau ou le type
@@ -364,11 +365,11 @@ class TerritorialDataService {
     const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'metro-departures');
     
     if (!data?.results) {
-      console.warn('[MetroDepartures] No data received from API');
+      logger.warn('[MetroDepartures] No data received from API');
       return [];
     }
-    
-    console.log('[MetroDepartures] Received', data.results.length, 'departures from API');
+
+    logger.debug('[MetroDepartures] Received', data.results.length, 'departures from API');
 
     return data.results.map((record): NextDeparture => {
       const lineShort = String(record.nomcourtligne || record.ligne || '').toLowerCase();
@@ -397,11 +398,11 @@ class TerritorialDataService {
     const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'bus-departures');
     
     if (!data?.results) {
-      console.warn('[BusDepartures] No data received from API');
+      logger.warn('[BusDepartures] No data received from API');
       return [];
     }
-    
-    console.log('[BusDepartures] Received', data.results.length, 'departures from API');
+
+    logger.debug('[BusDepartures] Received', data.results.length, 'departures from API');
 
     return data.results.map((record): NextDeparture => ({
       id: String(record.id || Math.random().toString(36).substr(2, 9)),
@@ -425,11 +426,11 @@ class TerritorialDataService {
     const data = await this.fetchFromManager<Record<string, unknown>>('star-metro-status');
 
     if (!data?.results) {
-      console.warn('[MetroLinesStatus] No data received from API');
+      logger.warn('[MetroLinesStatus] No data received from API');
       return [];
     }
 
-    console.log('[MetroLinesStatus] Received', data.results.length, 'lines status from API');
+    logger.debug('[MetroLinesStatus] Received', data.results.length, 'lines status from API');
 
     return data.results.map((record): MetroLineStatus => {
       const shortName = String(record.nomcourt || record.ligne || '').toLowerCase();
@@ -462,11 +463,11 @@ class TerritorialDataService {
     const data = await this.fetchFromManager<Record<string, unknown>>('star-metro-stations');
 
     if (!data?.results) {
-      console.warn('[MetroStationsStatus] No data received from API');
+      logger.warn('[MetroStationsStatus] No data received from API');
       return [];
     }
 
-    console.log('[MetroStationsStatus] Received', data.results.length, 'stations status from API');
+    logger.debug('[MetroStationsStatus] Received', data.results.length, 'stations status from API');
 
     return data.results.map((record): MetroStationStatus => {
       const etatStr = String(record.etat || record.status || 'ouvert').toLowerCase();
@@ -490,11 +491,11 @@ class TerritorialDataService {
     const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'metro-equipment-status');
     
     if (!data?.results) {
-      console.warn('[MetroEquipment] No data received from API');
+      logger.warn('[MetroEquipment] No data received from API');
       return [];
     }
-    
-    console.log('[MetroEquipment] Received', data.results.length, 'equipment status from API');
+
+    logger.debug('[MetroEquipment] Received', data.results.length, 'equipment status from API');
 
     return data.results.map((record): MetroEquipmentStatus => {
       // Déterminer le type d'équipement
@@ -529,11 +530,11 @@ class TerritorialDataService {
     const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'bus-stops');
     
     if (!data?.results) {
-      console.warn('[BusStops] No data received from API');
+      logger.warn('[BusStops] No data received from API');
       return [];
     }
-    
-    console.log('[BusStops] Received', data.results.length, 'stops from API');
+
+    logger.debug('[BusStops] Received', data.results.length, 'stops from API');
 
     return data.results
       .map((record): BusStop | null => {
@@ -557,11 +558,11 @@ class TerritorialDataService {
     const data = await this.fetchFromManager<Record<string, unknown>>('star-metro-stops-topo');
 
     if (!data?.results) {
-      console.warn('[MetroStations] No data received from API');
+      logger.warn('[MetroStations] No data received from API');
       return [];
     }
 
-    console.log('[MetroStations] Received', data.results.length, 'stations from API');
+    logger.debug('[MetroStations] Received', data.results.length, 'stations from API');
 
     return data.results
       .map((record): MetroStop | null => {
@@ -585,11 +586,11 @@ class TerritorialDataService {
     const data = await this.fetchFromManager<Record<string, unknown>>('star-communes');
 
     if (!data?.results) {
-      console.warn('[Communes] No data received from API');
+      logger.warn('[Communes] No data received from API');
       return [];
     }
 
-    console.log('[Communes] Received', data.results.length, 'communes from API');
+    logger.debug('[Communes] Received', data.results.length, 'communes from API');
 
     return data.results.map((record): Commune => ({
       id: String(record.code || record.codeinsee || record.id || ''),
@@ -601,16 +602,15 @@ class TerritorialDataService {
   }
 
   // === Données de fréquentation ===
-  async getFrequentationData(limit: number = 100): Promise<FrequentationData[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.FREQUENTATION_MAX_LIGNE, limit);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'frequentation');
-    
+  async getFrequentationData(): Promise<FrequentationData[]> {
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-frequentation');
+
     if (!data?.results) {
-      console.warn('[Frequentation] No data received from API');
+      logger.warn('[Frequentation] No data received from API');
       return [];
     }
-    
-    console.log('[Frequentation] Received', data.results.length, 'records from API');
+
+    logger.debug('[Frequentation] Received', data.results.length, 'records from API');
 
     return data.results.map((record): FrequentationData => {
       // Déterminer le niveau de fréquentation
@@ -635,15 +635,14 @@ class TerritorialDataService {
 
   // === Tarifs STAR ===
   async getTarifs(): Promise<Tarif[]> {
-    const url = buildSTARUrl(API_CONFIG.STAR.TARIFS, 300);
-    const data = await this.fetchWithCache<OpenDataSoftResponse<Record<string, unknown>>>(url, 'tarifs');
-    
+    const data = await this.fetchFromManager<Record<string, unknown>>('star-tarifs');
+
     if (!data?.results) {
-      console.warn('[Tarifs] No data received from API');
+      logger.warn('[Tarifs] No data received from API');
       return [];
     }
-    
-    console.log('[Tarifs] Received', data.results.length, 'tarifs from API');
+
+    logger.debug('[Tarifs] Received', data.results.length, 'tarifs from API');
 
     return data.results.map((record): Tarif => ({
       id: String(record.idtarif || record.id || Math.random().toString(36).substr(2, 9)),
