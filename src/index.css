@@ -206,6 +206,33 @@ body {
   background: transparent !important;
 }
 
+/* === Bus Tracker Style Popup === */
+.bus-tracker-popup .maplibregl-popup-content {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.bus-tracker-popup .maplibregl-popup-tip {
+  border-top-color: #1e1e1e !important;
+}
+
+.bus-tracker-popup .maplibregl-popup-close-button {
+  color: #888 !important;
+  font-size: 20px !important;
+  padding: 6px 10px !important;
+  right: 2px !important;
+  top: 2px !important;
+  z-index: 10;
+}
+
+.bus-tracker-popup .maplibregl-popup-close-button:hover {
+  color: #fff !important;
+}
+
 /* === Animations === */
 @keyframes slideIn {
   from {

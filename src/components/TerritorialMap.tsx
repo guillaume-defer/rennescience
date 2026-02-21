@@ -662,58 +662,122 @@ export default function TerritorialMap({
       return;
     }
 
+    // Create lookup map for line colors
+    const lineColorMap = new Map<string, string>();
+    busLines.forEach(line => {
+      lineColorMap.set(line.id, line.color);
+      lineColorMap.set(line.shortName, line.color);
+      lineColorMap.set(line.name, line.color);
+    });
+
     // Limiter le nombre de bus pour les performances
     const busesToShow = busPositions.slice(0, 150);
 
     busesToShow.forEach(bus => {
-      if (!bus.coordinates || 
-          !Array.isArray(bus.coordinates) || 
+      if (!bus.coordinates ||
+          !Array.isArray(bus.coordinates) ||
           bus.coordinates.length !== 2 ||
-          isNaN(bus.coordinates[0]) || 
+          isNaN(bus.coordinates[0]) ||
           isNaN(bus.coordinates[1])) {
         return;
       }
 
+      // Get line color from map, default to orange
+      const lineColor = lineColorMap.get(bus.lineId) ||
+                       lineColorMap.get(bus.lineName) ||
+                       '#f59e0b';
+      const lineName = escapeHTML((bus.lineName || bus.lineId || '?').slice(0, 4));
+
       const el = document.createElement('div');
       el.className = 'bus-marker';
-      el.style.cssText = 'cursor: pointer;';
+      el.style.cssText = 'cursor: pointer; position: relative;';
+
+      // Bus tracker style: circle indicator + pill badge with line number
       el.innerHTML = `
         <div style="
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: rgba(147, 51, 234, 0.85);
-          border: 2px solid #a855f7;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
           display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: center;
-          transition: transform 0.2s;
+          transform: translateY(-50%);
         ">
-          <span style="color: white; font-size: 9px; font-weight: bold;">${escapeHTML((bus.lineName || bus.lineId || '?').slice(0, 3))}</span>
+          <div style="
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: ${sanitizeCSSColor(lineColor)};
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            margin-bottom: 2px;
+          "></div>
+          <div style="
+            background: ${sanitizeCSSColor(lineColor)};
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+            white-space: nowrap;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.3);
+          ">${lineName}</div>
         </div>
       `;
 
-      const delayText = bus.delay !== undefined
+      // Calculate time since last update
+      const secondsAgo = Math.round((Date.now() - bus.lastUpdate.getTime()) / 1000);
+      const timeAgoText = secondsAgo < 60
+        ? `il y a ${secondsAgo} sec`
+        : `il y a ${Math.round(secondsAgo / 60)} min`;
+
+      // Delay indicator
+      const delayInfo = bus.delay !== undefined
         ? bus.delay > 0
-          ? `<span style="color: #fb923c;">+${Math.round(bus.delay / 60)}min</span>`
-          : `<span style="color: #4ade80;">À l'heure</span>`
+          ? `<span style="color: #fb923c; font-size: 11px;">+${Math.round(bus.delay / 60)} min</span>`
+          : `<span style="color: #4ade80; font-size: 11px;">À l'heure</span>`
         : '';
 
       const popup = new maplibregl.Popup({
-        offset: 15,
-        closeButton: false,
-        className: 'palantir-popup'
+        offset: 25,
+        closeButton: true,
+        closeOnClick: false,
+        className: 'bus-tracker-popup'
       }).setHTML(`
-        <div style="padding: 10px; min-width: 160px; background: #151b23; border-radius: 8px;">
-          <h4 style="font-weight: 600; color: #e6edf3; font-size: 13px;">Ligne ${escapeHTML(bus.lineName || bus.lineId)}</h4>
-          <p style="color: #7d8590; font-size: 12px; margin-top: 4px;">→ ${escapeHTML(bus.destination || 'Destination inconnue')}</p>
-          ${delayText ? `<p style="font-size: 11px; margin-top: 4px;">${delayText}</p>` : ''}
+        <div style="min-width: 220px; background: #1e1e1e; border-radius: 8px; overflow: hidden; font-family: system-ui, -apple-system, sans-serif;">
+          <!-- Header with line badge + destination -->
+          <div style="display: flex; align-items: center; padding: 12px; gap: 12px; border-bottom: 1px solid #333;">
+            <span style="
+              background: ${sanitizeCSSColor(lineColor)};
+              color: white;
+              font-weight: 800;
+              padding: 6px 12px;
+              border-radius: 6px;
+              font-size: 18px;
+              text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            ">${lineName}</span>
+            <span style="color: #e0c68b; font-size: 20px; font-weight: 600; flex: 1;">${escapeHTML(bus.destination || 'Destination')}</span>
+          </div>
+
+          <!-- Info row with bus icon + number + timestamp -->
+          <div style="display: flex; align-items: center; padding: 10px 12px; gap: 10px; background: #252525;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7d8590" stroke-width="2">
+                <path d="M8 6v6m8-6v6M4 10h16M5 10v9a1 1 0 001 1h3v-2a2 2 0 014 0v2h3a1 1 0 001-1v-9M8 20v1m8-1v1"/>
+                <rect x="4" y="4" width="16" height="6" rx="2"/>
+              </svg>
+              <span style="color: #aaa; font-size: 12px;">STAR</span>
+            </div>
+            <span style="color: #ccc; font-size: 12px;">n°${escapeHTML(bus.id.slice(-6))} — ${timeAgoText}</span>
+            ${delayInfo ? `<span style="margin-left: auto;">${delayInfo}</span>` : ''}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#4ade80" style="margin-left: auto;">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 2.61 1.43 4.88 3.54 6.08L12 22l3.46-6.92C17.57 13.88 19 11.61 19 9c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/>
+            </svg>
+          </div>
         </div>
       `);
 
       try {
-        const marker = new maplibregl.Marker({ element: el })
+        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat(bus.coordinates)
           .setPopup(popup)
           .addTo(map.current!);
@@ -727,7 +791,7 @@ export default function TerritorialMap({
     setDataStatus(prev => ({ ...prev, buses: busMarkersRef.current.length }));
     console.log('[Bus] Added', busMarkersRef.current.length, 'markers');
 
-  }, [mapLoaded, busPositions, layerVisibility.buses]);
+  }, [mapLoaded, busPositions, busLines, layerVisibility.buses]);
 
   // Mise à jour des marqueurs stations de métro
   useEffect(() => {
