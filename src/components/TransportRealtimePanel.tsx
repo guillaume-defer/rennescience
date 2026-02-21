@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { territorialDataService } from '../services/territorialDataService';
-import type { 
-  TrafficAlert, 
-  NextDeparture, 
+import type {
+  TrafficAlert,
+  NextDeparture,
   MetroLineStatus,
-  MetroEquipmentStatus 
+  MetroEquipmentStatus
 } from '../types';
+import { logger } from '../utils/logger';
 
 interface TransportRealtimePanelProps {
   className?: string;
@@ -17,6 +18,7 @@ export function TransportRealtimePanel({ className = '' }: TransportRealtimePane
   const [metroStatus, setMetroStatus] = useState<MetroLineStatus[]>([]);
   const [equipmentStatus, setEquipmentStatus] = useState<MetroEquipmentStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'alerts' | 'metro' | 'equipment'>('alerts');
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
@@ -35,8 +37,10 @@ export function TransportRealtimePanel({ className = '' }: TransportRealtimePane
       setMetroStatus(metroStatusData);
       setEquipmentStatus(equipData);
       setLastUpdate(new Date());
-    } catch (error) {
-      console.error('Error loading transport realtime data:', error);
+      setError(null);
+    } catch (err) {
+      logger.error('[TransportPanel] Error loading transport realtime data:', err);
+      setError('Impossible de charger les données transport');
     } finally {
       setLoading(false);
     }
@@ -171,6 +175,11 @@ export function TransportRealtimePanel({ className = '' }: TransportRealtimePane
 
       {/* Content */}
       <div className="p-4 max-h-[400px] overflow-y-auto">
+        {error && (
+          <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full"></div>
@@ -199,8 +208,8 @@ export function TransportRealtimePanel({ className = '' }: TransportRealtimePane
                           <p className="text-xs opacity-80 mt-1 line-clamp-2">{alert.description}</p>
                           {alert.affectedLines.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2">
-                              {alert.affectedLines.map((line, i) => (
-                                <span key={i} className="px-1.5 py-0.5 bg-white/10 rounded text-xs">
+                              {alert.affectedLines.map((line) => (
+                                <span key={line} className="px-1.5 py-0.5 bg-white/10 rounded text-xs">
                                   {line}
                                 </span>
                               ))}
@@ -254,12 +263,12 @@ export function TransportRealtimePanel({ className = '' }: TransportRealtimePane
                     <div key={station} className="p-2 bg-slate-700/30 rounded-lg">
                       <p className="text-xs text-slate-400 mb-1">{station}</p>
                       <div className="space-y-1">
-                        {deps.slice(0, 2).map((dep, i) => (
-                          <div key={i} className="flex items-center justify-between text-sm">
+                        {deps.slice(0, 2).map((dep) => (
+                          <div key={`${dep.stopId}-${dep.lineId}-${dep.departureTime.getTime()}`} className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
-                              <span 
+                              <span
                                 className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                                style={{ backgroundColor: dep.lineColor }}
+                                style={{ backgroundColor: dep.lineColor || '#6b7280' }}
                               >
                                 {dep.lineName.charAt(0)}
                               </span>
