@@ -1,5 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
+
+// === Security: HTML escaping to prevent XSS in popup content ===
+function escapeHTML(value: string | number | null | undefined): string {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Validates CSS color value to prevent CSS injection in style attributes
+function sanitizeCSSColor(color: string): string {
+  return /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : '#808080';
+}
 import {
   Layers,
   Bike,
@@ -139,20 +155,8 @@ export default function TerritorialMap({
   // Mise à jour des couches métro
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
-    
-    console.log('[Metro] Processing', metroLines.length, 'lines');
 
-    // Supprimer les sources/couches existantes
-    try {
-      if (map.current.getLayer('metro-lines')) {
-        map.current.removeLayer('metro-lines');
-      }
-      if (map.current.getSource('metro-source')) {
-        map.current.removeSource('metro-source');
-      }
-    } catch (e) {
-      console.warn('[Metro] Error removing layers:', e);
-    }
+    console.log('[Metro] Processing', metroLines.length, 'lines');
 
     if (metroLines.length === 0) {
       setDataStatus(prev => ({ ...prev, metro: 0 }));
@@ -178,31 +182,36 @@ export default function TerritorialMap({
     };
 
     try {
-      map.current.addSource('metro-source', {
-        type: 'geojson',
-        data: metroGeoJSON,
-      });
+      // Reuse existing source via setData() to avoid layer removal/re-add
+      if (map.current.getSource('metro-source')) {
+        (map.current.getSource('metro-source') as maplibregl.GeoJSONSource).setData(metroGeoJSON);
+      } else {
+        map.current.addSource('metro-source', {
+          type: 'geojson',
+          data: metroGeoJSON,
+        });
 
-      map.current.addLayer({
-        id: 'metro-lines',
-        type: 'line',
-        source: 'metro-source',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round',
-          visibility: layerVisibility.metro ? 'visible' : 'none',
-        },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 5,
-          'line-opacity': 0.9,
-        },
-      });
+        map.current.addLayer({
+          id: 'metro-lines',
+          type: 'line',
+          source: 'metro-source',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+            visibility: layerVisibility.metro ? 'visible' : 'none',
+          },
+          paint: {
+            'line-color': ['get', 'color'],
+            'line-width': 5,
+            'line-opacity': 0.9,
+          },
+        });
+      }
 
       setDataStatus(prev => ({ ...prev, metro: validLines.length }));
-      console.log('[Metro] Layer added successfully');
+      console.log('[Metro] Layer updated successfully');
     } catch (e) {
-      console.error('[Metro] Error adding layer:', e);
+      console.error('[Metro] Error updating layer:', e);
     }
 
   }, [mapLoaded, metroLines]);
@@ -229,21 +238,6 @@ export default function TerritorialMap({
 
     console.log('[BusLines] Processing', busLines.length, 'lines');
 
-    // Supprimer les sources/couches existantes
-    try {
-      if (map.current.getLayer('bus-lines-outline')) {
-        map.current.removeLayer('bus-lines-outline');
-      }
-      if (map.current.getLayer('bus-lines')) {
-        map.current.removeLayer('bus-lines');
-      }
-      if (map.current.getSource('bus-lines-source')) {
-        map.current.removeSource('bus-lines-source');
-      }
-    } catch (e) {
-      console.warn('[BusLines] Error removing layers:', e);
-    }
-
     if (busLines.length === 0) {
       setDataStatus(prev => ({ ...prev, busLines: 0 }));
       return;
@@ -269,6 +263,14 @@ export default function TerritorialMap({
     };
 
     try {
+      // Reuse existing source via setData() to avoid layer removal/re-add
+      if (map.current.getSource('bus-lines-source')) {
+        (map.current.getSource('bus-lines-source') as maplibregl.GeoJSONSource).setData(busLinesGeoJSON);
+        setDataStatus(prev => ({ ...prev, busLines: validLines.length }));
+        console.log('[BusLines] Layer data updated via setData');
+        return;
+      }
+
       map.current.addSource('bus-lines-source', {
         type: 'geojson',
         data: busLinesGeoJSON,
@@ -323,16 +325,16 @@ export default function TerritorialMap({
                   width: 24px;
                   height: 24px;
                   border-radius: 4px;
-                  background: ${props.color};
+                  background: ${sanitizeCSSColor(props.color)};
                   display: flex;
                   align-items: center;
                   justify-content: center;
                 ">
-                  <span style="color: white; font-weight: bold; font-size: 10px;">${props.shortName}</span>
+                  <span style="color: white; font-weight: bold; font-size: 10px;">${escapeHTML(props.shortName)}</span>
                 </div>
-                <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px;">Ligne ${props.shortName}</h4>
+                <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px;">Ligne ${escapeHTML(props.shortName)}</h4>
               </div>
-              <p style="font-size: 12px; color: #7d8590;">${props.name}</p>
+              <p style="font-size: 12px; color: #7d8590;">${escapeHTML(props.name)}</p>
             </div>
           `)
           .addTo(map.current);
@@ -486,13 +488,13 @@ export default function TerritorialMap({
         );
       });
 
-      const popup = new maplibregl.Popup({ 
-        offset: 25, 
+      const popup = new maplibregl.Popup({
+        offset: 25,
         closeButton: false,
         className: 'palantir-popup'
       }).setHTML(`
         <div style="padding: 12px; min-width: 200px; background: #151b23; border-radius: 8px;">
-          <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 8px;">${station.name}</h4>
+          <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 8px;">${escapeHTML(station.name)}</h4>
           <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
             <div style="display: flex; justify-content: space-between;">
               <span style="color: #7d8590;">Vélos disponibles</span>
@@ -603,13 +605,13 @@ export default function TerritorialMap({
         </div>
       `;
 
-      const popup = new maplibregl.Popup({ 
-        offset: 25, 
+      const popup = new maplibregl.Popup({
+        offset: 25,
         closeButton: false,
         className: 'palantir-popup'
       }).setHTML(`
         <div style="padding: 12px; min-width: 220px; background: #151b23; border-radius: 8px;">
-          <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 8px;">${parking.name}</h4>
+          <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 8px;">${escapeHTML(parking.name)}</h4>
           <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
             <div style="display: flex; justify-content: space-between;">
               <span style="color: #7d8590;">Places disponibles</span>
@@ -688,24 +690,24 @@ export default function TerritorialMap({
           justify-content: center;
           transition: transform 0.2s;
         ">
-          <span style="color: white; font-size: 9px; font-weight: bold;">${(bus.lineName || bus.lineId || '?').slice(0, 3)}</span>
+          <span style="color: white; font-size: 9px; font-weight: bold;">${escapeHTML((bus.lineName || bus.lineId || '?').slice(0, 3))}</span>
         </div>
       `;
 
       const delayText = bus.delay !== undefined
-        ? bus.delay > 0 
+        ? bus.delay > 0
           ? `<span style="color: #fb923c;">+${Math.round(bus.delay / 60)}min</span>`
           : `<span style="color: #4ade80;">À l'heure</span>`
         : '';
 
-      const popup = new maplibregl.Popup({ 
-        offset: 15, 
+      const popup = new maplibregl.Popup({
+        offset: 15,
         closeButton: false,
         className: 'palantir-popup'
       }).setHTML(`
         <div style="padding: 10px; min-width: 160px; background: #151b23; border-radius: 8px;">
-          <h4 style="font-weight: 600; color: #e6edf3; font-size: 13px;">Ligne ${bus.lineName || bus.lineId}</h4>
-          <p style="color: #7d8590; font-size: 12px; margin-top: 4px;">→ ${bus.destination || 'Destination inconnue'}</p>
+          <h4 style="font-weight: 600; color: #e6edf3; font-size: 13px;">Ligne ${escapeHTML(bus.lineName || bus.lineId)}</h4>
+          <p style="color: #7d8590; font-size: 12px; margin-top: 4px;">→ ${escapeHTML(bus.destination || 'Destination inconnue')}</p>
           ${delayText ? `<p style="font-size: 11px; margin-top: 4px;">${delayText}</p>` : ''}
         </div>
       `);
@@ -775,13 +777,13 @@ export default function TerritorialMap({
         </div>
       `;
 
-      const popup = new maplibregl.Popup({ 
-        offset: 15, 
+      const popup = new maplibregl.Popup({
+        offset: 15,
         closeButton: false,
         className: 'palantir-popup'
       }).setHTML(`
         <div style="padding: 12px; min-width: 180px; background: #151b23; border-radius: 8px;">
-          <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 6px;">🚇 ${station.name}</h4>
+          <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 6px;">🚇 ${escapeHTML(station.name)}</h4>
           <div style="display: flex; align-items: center; gap: 6px;">
             <div style="
               width: 20px;
@@ -793,7 +795,7 @@ export default function TerritorialMap({
               justify-content: center;
             ">
               <span style="color: white; font-weight: bold; font-size: 10px;">
-                ${station.lineId.toUpperCase().replace('LIGNE_', '')}
+                ${escapeHTML(station.lineId.toUpperCase().replace('LIGNE_', ''))}
               </span>
             </div>
             <span style="color: #7d8590; font-size: 12px;">Station Métro</span>
@@ -826,17 +828,6 @@ export default function TerritorialMap({
     const layerId = 'communes-fill';
     const lineLayerId = 'communes-line';
 
-    // Supprimer les couches existantes
-    if (map.current.getLayer(lineLayerId)) {
-      map.current.removeLayer(lineLayerId);
-    }
-    if (map.current.getLayer(layerId)) {
-      map.current.removeLayer(layerId);
-    }
-    if (map.current.getSource(sourceId)) {
-      map.current.removeSource(sourceId);
-    }
-
     if (!layerVisibility.communes || communes.length === 0) {
       setDataStatus(prev => ({ ...prev, communes: 0 }));
       return;
@@ -867,6 +858,14 @@ export default function TerritorialMap({
     }
 
     try {
+      // Reuse existing source via setData() to avoid layer removal/re-add
+      if (map.current.getSource(sourceId)) {
+        (map.current.getSource(sourceId) as maplibregl.GeoJSONSource).setData(geojson);
+        setDataStatus(prev => ({ ...prev, communes: geojson.features.length }));
+        console.log('[Communes] Layer data updated via setData');
+        return;
+      }
+
       map.current.addSource(sourceId, {
         type: 'geojson',
         data: geojson,
@@ -917,9 +916,9 @@ export default function TerritorialMap({
           .setLngLat(e.lngLat)
           .setHTML(`
             <div style="padding: 12px; min-width: 160px; background: #151b23; border-radius: 8px;">
-              <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 6px;">📍 ${props.name}</h4>
+              <h4 style="font-weight: 600; color: #e6edf3; font-size: 14px; margin-bottom: 6px;">📍 ${escapeHTML(props.name)}</h4>
               <div style="font-size: 12px; color: #7d8590;">
-                Code INSEE: ${props.code}
+                Code INSEE: ${escapeHTML(props.code)}
                 ${props.population ? `<br/>Population: ${Number(props.population).toLocaleString('fr-FR')}` : ''}
               </div>
             </div>
