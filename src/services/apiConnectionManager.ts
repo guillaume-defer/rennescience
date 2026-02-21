@@ -216,7 +216,7 @@ export const API_ENDPOINTS: APIEndpointConfig[] = [
     category: 'transport',
     baseUrl: API_CONFIG.STAR.BASE_URL,
     // Filter server-side: only fetch "aller" direction routes to halve the number of records
-    endpoint: `${API_CONFIG.STAR.BUS_ROUTES_TOPOLOGY}/records?limit=100&where=sens%3D'A'`,
+    endpoint: `${API_CONFIG.STAR.BUS_ROUTES_TOPOLOGY}/records?limit=100&where=sens=0`,
     method: 'GET',
     requiresAuth: false,
     timeout: 20000,
@@ -262,7 +262,7 @@ export const API_ENDPOINTS: APIEndpointConfig[] = [
     description: 'Établissements scolaires du premier degré',
     category: 'education',
     baseUrl: API_CONFIG.RENNES_METROPOLE.BASE_URL,
-    endpoint: `${API_CONFIG.RENNES_METROPOLE.ECOLES_PRIMAIRES}/records?limit=500`,
+    endpoint: `${API_CONFIG.RENNES_METROPOLE.ECOLES_PRIMAIRES}/records?limit=100`,
     method: 'GET',
     requiresAuth: false,
     timeout: 15000,
@@ -277,7 +277,7 @@ export const API_ENDPOINTS: APIEndpointConfig[] = [
     description: 'Établissements scolaires du second degré',
     category: 'education',
     baseUrl: API_CONFIG.RENNES_METROPOLE.BASE_URL,
-    endpoint: `${API_CONFIG.RENNES_METROPOLE.ECOLES_SECONDAIRES}/records?limit=200`,
+    endpoint: `${API_CONFIG.RENNES_METROPOLE.ECOLES_SECONDAIRES}/records?limit=100`,
     method: 'GET',
     requiresAuth: false,
     timeout: 15000,
@@ -292,7 +292,7 @@ export const API_ENDPOINTS: APIEndpointConfig[] = [
     description: 'Parcs et jardins publics',
     category: 'environment',
     baseUrl: API_CONFIG.RENNES_METROPOLE.BASE_URL,
-    endpoint: `${API_CONFIG.RENNES_METROPOLE.ESPACES_VERTS}/records?limit=500`,
+    endpoint: `${API_CONFIG.RENNES_METROPOLE.ESPACES_VERTS}/records?limit=100`,
     method: 'GET',
     requiresAuth: false,
     timeout: 15000,
@@ -313,7 +313,7 @@ export const API_ENDPOINTS: APIEndpointConfig[] = [
     timeout: 15000,
     retryCount: 2,
     cacheTTL: 86400000,
-    isEnabled: true,
+    isEnabled: false, // Dataset dechetteries-rennes-metropole not found on data.rennesmetropole.fr
     priority: 'low',
   },
   // === Région Bretagne ===
@@ -345,7 +345,7 @@ export const API_ENDPOINTS: APIEndpointConfig[] = [
     timeout: 10000,
     retryCount: 2,
     cacheTTL: 300000,
-    isEnabled: true,
+    isEnabled: false, // API returns 403 Forbidden - endpoint restricted
     priority: 'medium',
   },
   // === Bornes de recharge ===
@@ -432,7 +432,7 @@ export const API_ENDPOINTS: APIEndpointConfig[] = [
     description: 'Grille tarifaire STAR',
     category: 'transport',
     baseUrl: API_CONFIG.STAR.BASE_URL,
-    endpoint: `${API_CONFIG.STAR.TARIFS}/records?limit=300`,
+    endpoint: `${API_CONFIG.STAR.TARIFS}/records?limit=100`,
     method: 'GET',
     requiresAuth: false,
     timeout: 15000,
